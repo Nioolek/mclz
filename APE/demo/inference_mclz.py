@@ -24,8 +24,8 @@ from detectron2.evaluation.coco_evaluation import instances_to_coco_json
 from detectron2.utils.logger import setup_logger
 from predictor_lazy import VisualizationDemo
 
-from blip_models.blip import blip_decoder
-from blip_models.blip_vqa import blip_vqa
+# from blip_models.blip import blip_decoder
+# from blip_models.blip_vqa import blip_vqa
 
 ckpt_repo_id = "shenyunhang/APE"
 
@@ -181,36 +181,36 @@ def load_APE_D():
 
     return ape_model, cfg
 
-def load_blip_vqa():
-    model_url = 'https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base_vqa_capfilt_large.pth'
-    model = blip_vqa(pretrained=model_url, image_size=480, vit='base')
-    model.eval()
-    model = model.to(running_device)
-    return model
+# def load_blip_vqa():
+#     model_url = 'https://storage.googleapis.com/sfr-vision-language-research/BLIP/models/model_base_vqa_capfilt_large.pth'
+#     model = blip_vqa(pretrained=model_url, image_size=480, vit='base')
+#     model.eval()
+#     model = model.to(running_device)
+#     return model
 
-blip_img_transform = transforms.Compose([
-        transforms.Resize((480, 480), interpolation=InterpolationMode.BICUBIC),
-        transforms.ToTensor(),
-        transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
-        ])
+# blip_img_transform = transforms.Compose([
+#         transforms.Resize((480, 480), interpolation=InterpolationMode.BICUBIC),
+#         transforms.ToTensor(),
+#         transforms.Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711))
+#         ])
 
 
-def transform_blip_img(img, bbox):
-    x1, y1, w, h = bbox
-    # 按照坐标，从原图中截取
-
-    img_h, img_w, _ = img.shape
-    x1 = max(0, int(x1 - w * 0.6))
-    y1 = max(0, int(y1 - h * 0.3))
-    y2 = min(img_h, int(y1 + h * 1.6))
-    x2 = min(img_w, int(x1 + w * 1.3))
-    img = img[y1:y2, x1:x2]
-    # 将img转为RGB，再转为PIL
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img = Image.fromarray(img).convert('RGB')
-
-    image = blip_img_transform(img).unsqueeze(0).to(running_device)
-    return image
+# def transform_blip_img(img, bbox):
+#     x1, y1, w, h = bbox
+#     # 按照坐标，从原图中截取
+#
+#     img_h, img_w, _ = img.shape
+#     x1 = max(0, int(x1 - w * 0.6))
+#     y1 = max(0, int(y1 - h * 0.3))
+#     y2 = min(img_h, int(y1 + h * 1.6))
+#     x2 = min(img_w, int(x1 + w * 1.3))
+#     img = img[y1:y2, x1:x2]
+#     # 将img转为RGB，再转为PIL
+#     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+#     img = Image.fromarray(img).convert('RGB')
+#
+#     image = blip_img_transform(img).unsqueeze(0).to(running_device)
+#     return image
 
 
 def run_on_image(
@@ -318,7 +318,19 @@ def inference_img():
             category_id = res_i['category_id']
             if (category_id in [6, 7]) and score< 0.3:
                 continue
-            new_res.append(res_i)
+
+            # 抽烟
+            if category_id in [4, ]:
+                new_res.append(res_i)
+            # 没穿衣服
+            elif category_id in [6, 7]:
+                if score>=0.3:
+                    new_res.append(res_i)
+            # 其他
+            else:
+                if score>=0.25:
+                    new_res.append(res_i)
+
         res = new_res
         print(res)
 
@@ -407,6 +419,9 @@ def inference_video():
                 # 处理图片
                 res = run_on_image('tmp.jpg', promot_txt, ape_model, cfg)
 
+                # 过滤一下结果
+                new_res = []
+
                 # # 先处理人
                 # person_res = [k for k in res if k['category_id'] == 0]
                 # for p in person_res:
@@ -476,7 +491,8 @@ if __name__ == '__main__':
     # ape_model, cfg = load_APE_B()
     # ape_model, cfg = load_APE_C()
     ape_model, cfg = load_APE_D()
-    ape_model.predictor.model.model_vision.test_score_thresh = 0.25
+    # 抽烟按照0.15
+    ape_model.predictor.model.model_vision.test_score_thresh = 0.15
 
     # person, mouse, cat, dog, cigarette, person who is smoking, person who is shirtless, person without clothing
     promot_txt = ','.join(
@@ -489,7 +505,7 @@ if __name__ == '__main__':
     classes_chn = ['无', '抽烟', '赤膊', '老鼠', '猫', '狗', '人']
 
     # 加载BLIP模型
-    blip_model = load_blip_vqa()
+    # blip_model = load_blip_vqa()
 
 
     if flag == 'video':
